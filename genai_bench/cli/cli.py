@@ -381,11 +381,14 @@ def benchmark(
     # and run the experiment
     iteration_values = batch_size if iteration_type == "batch_size" else num_concurrency
     total_runs = len(traffic_scenario) * len(iteration_values)
+    previous_concurrency = None  # Track previous concurrency for adaptive cooldown
     with dashboard.live:
         for scenario_str in traffic_scenario:
             dashboard.reset_plot_metrics()
             sanitized_scenario_str = sanitize_string(scenario_str)
             runner.update_scenario(scenario_str)
+            # Reset previous concurrency when starting a new scenario
+            previous_concurrency = None
 
             # Store metrics for current scenario for interim plot
             scenario_metrics = {
@@ -488,8 +491,20 @@ def benchmark(
 
                 dashboard.update_total_progress_bars(total_runs)
 
-                # Sleep for 1 sec for server to clear aborted requests
-                time.sleep(1)
+                # Sleep to let workers finish pending requests before next run
+                # Scale with both number of workers and previous concurrency level
+                # to handle high-load scenario transitions
+                if num_workers > 0:
+                    # Base cooldown from workers, plus extra for previous high concurrency
+                    base_cooldown = max(2, num_workers * 2)
+                    concurrency_bonus = (previous_concurrency // 32) if previous_concurrency else 0
+                    cooldown_time = base_cooldown + concurrency_bonus
+                else:
+                    cooldown_time = 1
+                time.sleep(cooldown_time)
+                
+                # Update previous concurrency for next iteration
+                previous_concurrency = concurrency
 
             # Plot using in-memory data after all concurrency levels are done
             plot_single_scenario_inference_speed_vs_throughput(

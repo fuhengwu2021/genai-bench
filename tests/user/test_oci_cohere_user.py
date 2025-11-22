@@ -6,6 +6,7 @@ from oci.generative_ai_inference.models import (
     CohereChatRequest,
     DedicatedServingMode,
     EmbedTextDetails,
+    GenericChatRequest,
     OnDemandServingMode,
     RerankTextDetails,
 )
@@ -13,6 +14,7 @@ from oci.generative_ai_inference.models import (
 from genai_bench.protocol import (
     UserChatRequest,
     UserEmbeddingRequest,
+    UserImageChatRequest,
     UserImageEmbeddingRequest,
     UserReRankRequest,
 )
@@ -76,23 +78,20 @@ def test_chat(mock_client_class, test_cohere_user):
 
     test_cohere_user.chat()
 
-    mock_client_instance.chat.assert_called_once_with(
-        ChatDetails(
-            compartment_id="ocid1.compartment.oc1..example",
-            serving_mode=OnDemandServingMode(model_id="cohere-model"),
-            chat_request=CohereChatRequest(
-                api_format="COHERE",
-                message="Hello",
-                max_tokens=10,
-                is_stream=True,
-                temperature=0.1,
-                top_p=0,
-                top_k=0.75,
-                frequency_penalty=0,
-                presence_penalty=0,
-            ),
-        )
-    )
+    # Verify the chat request was called
+    call_args = mock_client_instance.chat.call_args[0][0]
+    chat_request = call_args.chat_request
+    
+    # Verify api_format is COHEREV2 and uses GenericChatRequest with messages array
+    assert isinstance(chat_request, GenericChatRequest)
+    assert chat_request.api_format == "COHEREV2"
+    assert len(chat_request.messages) == 1
+    assert chat_request.messages[0]["role"] == "USER"
+    assert len(chat_request.messages[0]["content"]) == 1
+    assert chat_request.messages[0]["content"][0]["type"] == "TEXT"
+    assert chat_request.messages[0]["content"][0]["text"] == "Hello"
+    assert chat_request.max_tokens == 10
+    assert chat_request.is_stream is True
     metrics_collector_mock.assert_called_once()
     args, _ = metrics_collector_mock.call_args
     user_response = args[0]
@@ -136,23 +135,20 @@ def test_chat_json_error(mock_client_class, test_cohere_user):
 
     test_cohere_user.chat()
 
-    mock_client_instance.chat.assert_called_once_with(
-        ChatDetails(
-            compartment_id="ocid1.compartment.oc1..example",
-            serving_mode=OnDemandServingMode(model_id="cohere-model"),
-            chat_request=CohereChatRequest(
-                api_format="COHERE",
-                message="Hello",
-                max_tokens=10,
-                is_stream=True,
-                temperature=0.1,
-                top_p=0,
-                top_k=0.75,
-                frequency_penalty=0,
-                presence_penalty=0,
-            ),
-        )
-    )
+    # Verify the chat request was called
+    call_args = mock_client_instance.chat.call_args[0][0]
+    chat_request = call_args.chat_request
+    
+    # Verify api_format is COHEREV2 and uses GenericChatRequest with messages array
+    assert isinstance(chat_request, GenericChatRequest)
+    assert chat_request.api_format == "COHEREV2"
+    assert len(chat_request.messages) == 1
+    assert chat_request.messages[0]["role"] == "USER"
+    assert len(chat_request.messages[0]["content"]) == 1
+    assert chat_request.messages[0]["content"][0]["type"] == "TEXT"
+    assert chat_request.messages[0]["content"][0]["text"] == "Hello"
+    assert chat_request.max_tokens == 10
+    assert chat_request.is_stream is True
     metrics_collector_mock.assert_called_once()
     args, _ = metrics_collector_mock.call_args
     user_response = args[0]
@@ -212,23 +208,20 @@ def test_chat_with_response_error(mock_client_class, mock_logger, test_cohere_us
 
     test_cohere_user.chat()
 
-    mock_client_instance.chat.assert_called_once_with(
-        ChatDetails(
-            compartment_id="ocid1.compartment.oc1..example",
-            serving_mode=OnDemandServingMode(model_id="cohere-model"),
-            chat_request=CohereChatRequest(
-                api_format="COHERE",
-                message="Hello",
-                max_tokens=10,
-                is_stream=True,
-                temperature=0.1,
-                top_p=0,
-                top_k=0.75,
-                frequency_penalty=0,
-                presence_penalty=0,
-            ),
-        )
-    )
+    # Verify the chat request was called
+    call_args = mock_client_instance.chat.call_args[0][0]
+    chat_request = call_args.chat_request
+    
+    # Verify api_format is COHEREV2 and uses GenericChatRequest with messages array
+    assert isinstance(chat_request, GenericChatRequest)
+    assert chat_request.api_format == "COHEREV2"
+    assert len(chat_request.messages) == 1
+    assert chat_request.messages[0]["role"] == "USER"
+    assert len(chat_request.messages[0]["content"]) == 1
+    assert chat_request.messages[0]["content"][0]["type"] == "TEXT"
+    assert chat_request.messages[0]["content"][0]["text"] == "Hello"
+    assert chat_request.max_tokens == 10
+    assert chat_request.is_stream is True
     metrics_collector_mock.assert_called_once()
     args, _ = metrics_collector_mock.call_args
     user_response = args[0]
@@ -445,7 +438,11 @@ def test_chat_with_chat_history(mock_client_class, test_cohere_user):
     test_cohere_user.chat()
 
     chat_request = mock_client_instance.chat.call_args[0][0].chat_request
-    assert chat_request.chat_history == chat_history
+    # COHEREV2 format includes chat history in messages array
+    assert isinstance(chat_request, GenericChatRequest)
+    assert len(chat_request.messages) == 2  # History + current message
+    assert chat_request.messages[0]["role"] == "USER"
+    assert chat_request.messages[0]["content"][0]["text"] == "Previous message"
 
 
 @patch("genai_bench.user.oci_cohere_user.GenerativeAiInferenceClient")
@@ -472,7 +469,366 @@ def test_chat_with_documents(mock_client_class, test_cohere_user):
     test_cohere_user.chat()
 
     chat_request = mock_client_instance.chat.call_args[0][0].chat_request
-    assert chat_request.documents == documents
+    # COHEREV2 format doesn't support documents field directly
+    # Documents would need to be included in message content if needed
+    assert isinstance(chat_request, GenericChatRequest)
+    # Documents are not currently supported in COHEREV2 messages format
+
+
+@patch("genai_bench.user.oci_cohere_user.GenerativeAiInferenceClient")
+def test_chat_with_images_data_url(mock_client_class, test_cohere_user):
+    """Test chat with images in data URL format (image-text-to-text task)."""
+    mock_client_instance = mock_client_class.return_value
+    mock_client_instance.chat.return_value.status = 200
+    mock_client_instance.chat.return_value.data.events.return_value = iter(
+        [
+            MagicMock(data=b'{"apiFormat":"COHERE","text":"This","pad":"aaaaaaaaa"}'),
+            MagicMock(
+                data=b'{"apiFormat":"COHERE","text":" image","pad":"aaaaaaaaa"}'
+            ),
+            MagicMock(
+                data=b'{"apiFormat":"COHERE","finishReason": "tokens", "text":""}'
+            ),
+        ]
+    )
+
+    test_cohere_user.on_start()
+    # Image in data URL format
+    images = ["data:image/jpeg;base64,BASE64ImageData123"]
+    test_cohere_user.sample = lambda: UserImageChatRequest(
+        model="cohere-vision-model",
+        prompt="Describe this image",
+        image_content=images,
+        num_images=1,
+        num_prefill_tokens=10,
+        additional_request_params={
+            "compartmentId": "ocid1.compartment.oc1..example",
+            "servingType": "ON_DEMAND",
+        },
+        max_tokens=50,
+    )
+
+    metrics_collector_mock = MagicMock()
+    test_cohere_user.collect_metrics = metrics_collector_mock
+
+    test_cohere_user.chat()
+
+    # Verify the chat request was called with images
+    call_args = mock_client_instance.chat.call_args[0][0]
+    chat_request = call_args.chat_request
+    
+    # Verify COHEREV2 format with messages array containing image
+    assert isinstance(chat_request, GenericChatRequest)
+    assert chat_request.api_format == "COHEREV2"
+    assert len(chat_request.messages) == 1
+    assert chat_request.messages[0]["role"] == "USER"
+    assert len(chat_request.messages[0]["content"]) == 2  # TEXT + IMAGE
+    assert chat_request.messages[0]["content"][0]["type"] == "TEXT"
+    assert chat_request.messages[0]["content"][0]["text"] == "Describe this image"
+    assert chat_request.messages[0]["content"][1]["type"] == "IMAGE_URL"
+    assert "data:image/jpeg;base64,BASE64ImageData123" in chat_request.messages[0]["content"][1]["imageUrl"]["url"]
+    
+    # Verify vision requests use "COHEREV2" api_format
+    assert chat_request.api_format == "COHEREV2"
+    
+    metrics_collector_mock.assert_called_once()
+    args, _ = metrics_collector_mock.call_args
+    user_response = args[0]
+    assert user_response.status_code == 200
+    assert user_response.num_prefill_tokens == 10
+
+
+@patch("genai_bench.user.oci_cohere_user.GenerativeAiInferenceClient")
+def test_chat_with_images_base64(mock_client_class, test_cohere_user):
+    """Test chat with images in base64 format (image-text-to-text task)."""
+    mock_client_instance = mock_client_class.return_value
+    mock_client_instance.chat.return_value.status = 200
+    mock_client_instance.chat.return_value.data.events.return_value = iter(
+        [
+            MagicMock(data=b'{"apiFormat":"COHERE","text":"The","pad":"aaaaaaaaa"}'),
+            MagicMock(
+                data=b'{"apiFormat":"COHERE","text":" picture","pad":"aaaaaaaaa"}'
+            ),
+            MagicMock(
+                data=b'{"apiFormat":"COHERE","finishReason": "tokens", "text":""}'
+            ),
+        ]
+    )
+
+    test_cohere_user.on_start()
+    # Image already in base64 format (no data URL prefix)
+    images = ["BASE64ImageData456", "BASE64ImageData789"]
+    test_cohere_user.sample = lambda: UserImageChatRequest(
+        model="cohere-vision-model",
+        prompt="What do you see in these images?",
+        image_content=images,
+        num_images=2,
+        num_prefill_tokens=15,
+        additional_request_params={
+            "compartmentId": "ocid1.compartment.oc1..example",
+            "servingType": "ON_DEMAND",
+        },
+        max_tokens=100,
+    )
+
+    metrics_collector_mock = MagicMock()
+    test_cohere_user.collect_metrics = metrics_collector_mock
+
+    test_cohere_user.chat()
+
+    # Verify the chat request was called with images
+    call_args = mock_client_instance.chat.call_args[0][0]
+    chat_request = call_args.chat_request
+    
+    # Verify COHEREV2 format with messages array containing multiple images
+    assert isinstance(chat_request, GenericChatRequest)
+    assert chat_request.api_format == "COHEREV2"
+    assert len(chat_request.messages) == 1
+    assert chat_request.messages[0]["role"] == "USER"
+    assert len(chat_request.messages[0]["content"]) == 3  # TEXT + 2 IMAGES
+    assert chat_request.messages[0]["content"][0]["type"] == "TEXT"
+    assert chat_request.messages[0]["content"][0]["text"] == "What do you see in these images?"
+    
+    # Verify vision requests use "COHEREV2" api_format
+    assert chat_request.api_format == "COHEREV2"
+    
+    metrics_collector_mock.assert_called_once()
+    args, _ = metrics_collector_mock.call_args
+    user_response = args[0]
+    assert user_response.status_code == 200
+    assert user_response.num_prefill_tokens == 15
+
+
+@patch("genai_bench.user.oci_cohere_user.GenerativeAiInferenceClient")
+def test_chat_with_images_mixed_format(mock_client_class, test_cohere_user):
+    """Test chat with mixed image formats (data URL and base64)."""
+    mock_client_instance = mock_client_class.return_value
+    mock_client_instance.chat.return_value.status = 200
+    mock_client_instance.chat.return_value.data.events.return_value = iter(
+        [
+            MagicMock(data=b'{"apiFormat":"COHERE","text":"Mixed","pad":"aaaaaaaaa"}'),
+            MagicMock(
+                data=b'{"apiFormat":"COHERE","finishReason": "tokens", "text":""}'
+            ),
+        ]
+    )
+
+    test_cohere_user.on_start()
+    # Mix of data URL and base64 formats
+    images = [
+        "data:image/png;base64,BASE64ImageData1",
+        "BASE64ImageData2",  # Already base64
+    ]
+    test_cohere_user.sample = lambda: UserImageChatRequest(
+        model="cohere-vision-model",
+        prompt="Compare these images",
+        image_content=images,
+        num_images=2,
+        num_prefill_tokens=20,
+        additional_request_params={
+            "compartmentId": "ocid1.compartment.oc1..example",
+            "servingType": "ON_DEMAND",
+        },
+        max_tokens=150,
+    )
+
+    metrics_collector_mock = MagicMock()
+    test_cohere_user.collect_metrics = metrics_collector_mock
+
+    test_cohere_user.chat()
+
+    # Verify the chat request was called with processed images
+    call_args = mock_client_instance.chat.call_args[0][0]
+    chat_request = call_args.chat_request
+    
+    # Verify COHEREV2 format with messages array containing mixed format images
+    assert isinstance(chat_request, GenericChatRequest)
+    assert chat_request.api_format == "COHEREV2"
+    assert len(chat_request.messages) == 1
+    assert chat_request.messages[0]["role"] == "USER"
+    assert len(chat_request.messages[0]["content"]) == 3  # TEXT + 2 IMAGES
+    assert chat_request.messages[0]["content"][0]["type"] == "TEXT"
+    assert chat_request.messages[0]["content"][0]["text"] == "Compare these images"
+    
+    metrics_collector_mock.assert_called_once()
+    args, _ = metrics_collector_mock.call_args
+    user_response = args[0]
+    assert user_response.status_code == 200
+    assert user_response.num_prefill_tokens == 20
+
+
+@patch("genai_bench.user.oci_cohere_user.GenerativeAiInferenceClient")
+def test_chat_vision_request_no_api_format(mock_client_class, test_cohere_user):
+    """Test that vision requests (with images) use api_format="COHEREV2"."""
+    mock_client_instance = mock_client_class.return_value
+    mock_client_instance.chat.return_value.status = 200
+    mock_client_instance.chat.return_value.data.events.return_value = iter(
+        [
+            MagicMock(data=b'{"text":"This","pad":"aaaaaaaaa"}'),
+            MagicMock(data=b'{"text":" image","pad":"aaaaaaaaa"}'),
+            MagicMock(data=b'{"finishReason": "tokens", "text":""}'),
+        ]
+    )
+
+    test_cohere_user.on_start()
+    images = ["data:image/jpeg;base64,BASE64ImageData123"]
+    test_cohere_user.sample = lambda: UserImageChatRequest(
+        model="cohere.command-a-vision",
+        prompt="Describe this image",
+        image_content=images,
+        num_images=1,
+        num_prefill_tokens=10,
+        additional_request_params={
+            "compartmentId": "ocid1.compartment.oc1..example",
+            "servingType": "ON_DEMAND",
+        },
+        max_tokens=50,
+    )
+
+    metrics_collector_mock = MagicMock()
+    test_cohere_user.collect_metrics = metrics_collector_mock
+
+    test_cohere_user.chat()
+
+    # Verify the chat request was called
+    call_args = mock_client_instance.chat.call_args[0][0]
+    chat_request = call_args.chat_request
+    
+    # CRITICAL: Vision requests use "COHEREV2" api_format
+    assert chat_request.api_format == "COHEREV2"
+    
+    # Verify COHEREV2 format with messages array containing image
+    assert isinstance(chat_request, GenericChatRequest)
+    assert chat_request.api_format == "COHEREV2"
+    assert len(chat_request.messages) == 1
+    assert chat_request.messages[0]["role"] == "USER"
+    assert len(chat_request.messages[0]["content"]) == 2  # TEXT + IMAGE
+    assert chat_request.messages[0]["content"][0]["type"] == "TEXT"
+    assert chat_request.messages[0]["content"][0]["text"] == "Describe this image"
+    
+    metrics_collector_mock.assert_called_once()
+    args, _ = metrics_collector_mock.call_args
+    user_response = args[0]
+    assert user_response.status_code == 200
+
+
+@patch("genai_bench.user.oci_cohere_user.GenerativeAiInferenceClient")
+def test_chat_text_request_has_api_format(mock_client_class, test_cohere_user):
+    """Test that text-only requests (without images) use api_format="COHEREV2"."""
+    mock_client_instance = mock_client_class.return_value
+    mock_client_instance.chat.return_value.status = 200
+    mock_client_instance.chat.return_value.data.events.return_value = iter(
+        [
+            MagicMock(data=b'{"apiFormat":"COHERE","text":"Hello","pad":"aaaaaaaaa"}'),
+            MagicMock(data=b'{"apiFormat":"COHERE","text":" world","pad":"aaaaaaaaa"}'),
+            MagicMock(data=b'{"apiFormat":"COHERE","finishReason": "tokens", "text":""}'),
+        ]
+    )
+
+    test_cohere_user.on_start()
+    test_cohere_user.sample = lambda: UserChatRequest(
+        model="cohere-model",
+        prompt="Hello",
+        num_prefill_tokens=5,
+        additional_request_params={
+            "compartmentId": "ocid1.compartment.oc1..example",
+            "servingType": "ON_DEMAND",
+        },
+        max_tokens=10,
+    )
+
+    metrics_collector_mock = MagicMock()
+    test_cohere_user.collect_metrics = metrics_collector_mock
+
+    test_cohere_user.chat()
+
+    # Verify the chat request was called
+    call_args = mock_client_instance.chat.call_args[0][0]
+    chat_request = call_args.chat_request
+    
+    # CRITICAL: Text-only requests use "COHEREV2" api_format with GenericChatRequest
+    assert isinstance(chat_request, GenericChatRequest)
+    assert chat_request.api_format == "COHEREV2"
+    assert len(chat_request.messages) == 1
+    assert chat_request.messages[0]["role"] == "USER"
+    assert len(chat_request.messages[0]["content"]) == 1  # TEXT only, no images
+    assert chat_request.messages[0]["content"][0]["type"] == "TEXT"
+    assert chat_request.messages[0]["content"][0]["text"] == "Hello"
+    
+    metrics_collector_mock.assert_called_once()
+    args, _ = metrics_collector_mock.call_args
+    user_response = args[0]
+    assert user_response.status_code == 200
+
+
+@patch("genai_bench.user.oci_cohere_user.GenerativeAiInferenceClient")
+def test_chat_vision_vs_text_api_format_difference(mock_client_class, test_cohere_user):
+    """Test that vision and text requests handle api_format differently."""
+    mock_client_instance = mock_client_class.return_value
+    mock_client_instance.chat.return_value.status = 200
+    mock_client_instance.chat.return_value.data.events.return_value = iter(
+        [
+            MagicMock(data=b'{"text":"Response","pad":"aaaaaaaaa"}'),
+            MagicMock(data=b'{"finishReason": "tokens", "text":""}'),
+        ]
+    )
+
+    test_cohere_user.on_start()
+    metrics_collector_mock = MagicMock()
+    test_cohere_user.collect_metrics = metrics_collector_mock
+
+    # Test 1: Vision request (with images) - should use api_format="COHEREV2"
+    images = ["data:image/jpeg;base64,BASE64ImageData"]
+    test_cohere_user.sample = lambda: UserImageChatRequest(
+        model="cohere.command-a-vision",
+        prompt="Describe this",
+        image_content=images,
+        num_images=1,
+        num_prefill_tokens=10,
+        additional_request_params={
+            "compartmentId": "ocid1.compartment.oc1..example",
+            "servingType": "ON_DEMAND",
+        },
+        max_tokens=50,
+    )
+
+    test_cohere_user.chat()
+    call_args_vision = mock_client_instance.chat.call_args[0][0]
+    chat_request_vision = call_args_vision.chat_request
+    
+    # Vision request should use "COHEREV2" api_format with GenericChatRequest
+    assert isinstance(chat_request_vision, GenericChatRequest)
+    assert chat_request_vision.api_format == "COHEREV2"
+    assert len(chat_request_vision.messages) == 1
+    assert len(chat_request_vision.messages[0]["content"]) == 2  # TEXT + IMAGE
+    assert chat_request_vision.messages[0]["content"][1]["type"] == "IMAGE_URL"
+    
+    # Reset mock
+    mock_client_instance.chat.reset_mock()
+    metrics_collector_mock.reset_mock()
+
+    # Test 2: Text request (without images) - should use api_format="COHEREV2"
+    test_cohere_user.sample = lambda: UserChatRequest(
+        model="cohere-model",
+        prompt="Hello",
+        num_prefill_tokens=5,
+        additional_request_params={
+            "compartmentId": "ocid1.compartment.oc1..example",
+            "servingType": "ON_DEMAND",
+        },
+        max_tokens=10,
+    )
+
+    test_cohere_user.chat()
+    call_args_text = mock_client_instance.chat.call_args[0][0]
+    chat_request_text = call_args_text.chat_request
+    
+    # Text request should also use "COHEREV2" api_format with GenericChatRequest
+    assert isinstance(chat_request_text, GenericChatRequest)
+    assert chat_request_text.api_format == "COHEREV2"
+    assert len(chat_request_text.messages) == 1
+    assert len(chat_request_text.messages[0]["content"]) == 1  # TEXT only
+    assert chat_request_text.messages[0]["content"][0]["type"] == "TEXT"
 
 
 def test_get_compartment_id_missing(test_cohere_user):

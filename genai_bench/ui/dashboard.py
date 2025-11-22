@@ -275,10 +275,18 @@ class RichLiveDashboard:
         )
 
     def update_benchmark_progress_bars(self, progress_increment: float):
-        self.benchmark_progress.update(
-            self.benchmark_progress_task_id, completed=progress_increment
-        )
-        update_progress(self.layout, self.total_progress, self.benchmark_progress)
+        # Skip update if task ID is None or task doesn't exist (e.g., after run finished)
+        if self.benchmark_progress_task_id is None:
+            return
+        try:
+            self.benchmark_progress.update(
+                self.benchmark_progress_task_id, completed=progress_increment
+            )
+            update_progress(self.layout, self.total_progress, self.benchmark_progress)
+        except KeyError:
+            # Task was removed (e.g., run finished) but delayed messages still arriving
+            # Reset task ID to prevent repeated errors
+            self.benchmark_progress_task_id = None
 
     def create_benchmark_progress_task(self, run_name: str):
         self.benchmark_progress_task_id = self.benchmark_progress.add_task(
@@ -287,7 +295,9 @@ class RichLiveDashboard:
         update_progress(self.layout, self.total_progress, self.benchmark_progress)
 
     def update_total_progress_bars(self, total_runs: int):
-        self.benchmark_progress.remove_task(self.benchmark_progress_task_id)
+        if self.benchmark_progress_task_id is not None:
+            self.benchmark_progress.remove_task(self.benchmark_progress_task_id)
+            self.benchmark_progress_task_id = None
         self.total_progress.update(
             self.total_progress_task_id, advance=(1 / total_runs) * 100
         )
