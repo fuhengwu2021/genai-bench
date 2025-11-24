@@ -597,6 +597,14 @@ def experiment_options(func):
 
 def distributed_locust_options(func):
     func = click.option(
+        "--heartbeat-timeout",
+        type=int,
+        default=60,
+        required=False,
+        help="Heartbeat timeout in seconds between master and workers. "
+        "Default: 60s. Increase to 120s for vision workloads with high concurrency.",
+    )(func)
+    func = click.option(
         "--master-port",
         type=int,
         default=5557,

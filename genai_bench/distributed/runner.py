@@ -32,6 +32,7 @@ class DistributedConfig:
     master_port: int = 5557
     wait_time: int = 2
     log_dir: Optional[str] = None
+    heartbeat_timeout: int = 60
 
     # Experimental:
     # CPU pinning is not supported on all platforms, so we disable it by default
@@ -45,6 +46,15 @@ class DistributedConfig:
             logger.warning(
                 f"Number of workers ({self.num_workers}) is much higher than "
                 f"available CPU cores ({cpu_count}). This might impact performance."
+            )
+        
+        # Monkey-patch Locust's MASTER_HEARTBEAT_TIMEOUT to use configured value
+        if self.heartbeat_timeout != 60:
+            from locust import runners
+            runners.MASTER_HEARTBEAT_TIMEOUT = self.heartbeat_timeout
+            logger.info(
+                f"Set Locust MASTER_HEARTBEAT_TIMEOUT to {self.heartbeat_timeout}s "
+                f"(default: 60s)"
             )
 
 

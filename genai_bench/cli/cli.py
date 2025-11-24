@@ -121,6 +121,7 @@ def benchmark(
     num_workers,
     master_port,
     spawn_rate,
+    heartbeat_timeout,
     upload_results,
     namespace,
     # Storage auth options
@@ -359,6 +360,7 @@ def benchmark(
         num_workers=num_workers,
         master_port=master_port,
         log_dir=log_dir,
+        heartbeat_timeout=heartbeat_timeout,
     )
     runner = DistributedRunner(
         environment=environment,
